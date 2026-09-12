@@ -1,0 +1,753 @@
+
+
+Index · HTML
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Visual Sitemap Generator</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+ 
+<meta property="og:type" content="website">
+<meta property="og:title" content="Visual Sitemap Generator">
+<meta property="og:description" content="Paste any site's sitemap and get back its structure as a rotating 3D orbital map, categories and posts pulled straight from the WordPress REST API.">
+<meta property="og:image" content="https://engineeredai.net/tools/visual-sitemap-generator/og-image.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:url" content="https://engineeredai.net/tools/visual-sitemap-generator/">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Visual Sitemap Generator">
+<meta name="twitter:description" content="Paste any site's sitemap and get back its structure as a rotating 3D orbital map.">
+<meta name="twitter:image" content="https://engineeredai.net/tools/visual-sitemap-generator/og-image.jpg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+ 
+<style>
+  :root{
+    --bg-0:#04060d;
+    --bg-1:#0a0f1f;
+    --line:rgba(140,170,255,0.18);
+    --cyan:#5ad8ff;
+    --violet:#b06bff;
+    --mint:#4dffc4;
+    --text:#dbe3f5;
+    --text-dim:#7c8aad;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  html,body{
+    width:100%;height:100%;overflow:hidden;
+    background:var(--bg-0);
+    font-family:'Inter',system-ui,sans-serif;
+    color:var(--text);
+  }
+  #scene{position:fixed;inset:0;display:block;cursor:grab;}
+  #scene.dragging{cursor:grabbing;}
+ 
+  .hud{position:fixed;pointer-events:none;z-index:5;}
+ 
+  header.hud{
+    top:0;left:0;right:0;
+    display:flex;flex-direction:column;align-items:center;
+    padding:28px 20px 18px;
+    background:linear-gradient(to bottom, rgba(4,6,13,0.9), rgba(4,6,13,0));
+  }
+  header h1{
+    font-size:1.6rem;font-weight:700;letter-spacing:0.01em;
+    color:var(--text);
+  }
+  header .subtitle{
+    font-family:'Space Mono',monospace;
+    font-size:0.78rem;color:var(--cyan);
+    margin-top:6px;opacity:0.85;
+  }
+ 
+  .controls{
+    pointer-events:auto;
+    margin-top:18px;
+    display:flex;gap:8px;align-items:center;
+    width:100%;max-width:560px;
+  }
+  .controls input{
+    flex:1;
+    padding:11px 14px;
+    font-size:14px;font-family:'Space Mono',monospace;
+    background:rgba(15,20,38,0.85);
+    border:1px solid var(--line);
+    border-radius:8px;
+    color:var(--text);
+    outline:none;
+  }
+  .controls input:focus{border-color:var(--cyan);}
+  .controls button{
+    padding:11px 18px;
+    font-size:14px;font-weight:600;
+    background:linear-gradient(135deg, var(--cyan), var(--violet));
+    border:none;border-radius:8px;
+    color:#04060d;cursor:pointer;
+    white-space:nowrap;
+  }
+  .controls button:disabled{opacity:0.5;cursor:default;}
+  .controls button:hover:not(:disabled){filter:brightness(1.08);}
+ 
+  .status{
+    pointer-events:none;
+    margin-top:10px;
+    font-family:'Space Mono',monospace;
+    font-size:0.75rem;
+    color:var(--text-dim);
+    min-height:16px;
+    text-align:center;
+  }
+  .status.error{color:#ff7a7a;}
+ 
+  .stats{
+    bottom:18px;left:20px;
+    display:flex;gap:18px;
+    font-family:'Space Mono',monospace;
+    font-size:0.72rem;
+    color:var(--text-dim);
+  }
+  .stats span b{color:var(--text);font-weight:700;}
+ 
+  .legend{
+    bottom:18px;left:20px;
+    display:flex;flex-direction:column;gap:6px;
+    font-family:'Space Mono',monospace;
+    font-size:0.7rem;
+    color:var(--text-dim);
+  }
+  .legend .row{display:flex;align-items:center;gap:8px;}
+  .legend .dot{width:8px;height:8px;border-radius:50%;display:inline-block;}
+ 
+  .hint{
+    bottom:18px;right:20px;
+    font-family:'Space Mono',monospace;
+    font-size:0.7rem;color:var(--text-dim);
+    text-align:right;line-height:1.6;
+  }
+ 
+  #tooltip{
+    position:fixed;pointer-events:none;z-index:6;
+    padding:8px 12px;
+    background:rgba(10,14,28,0.95);
+    border:1px solid var(--line);
+    border-radius:6px;
+    font-family:'Space Mono',monospace;
+    font-size:0.72rem;
+    color:var(--text);
+    max-width:280px;
+    display:none;
+    transform:translate(-50%,-130%);
+  }
+  #tooltip .kind{color:var(--cyan);display:block;font-size:0.62rem;letter-spacing:0.04em;margin-bottom:3px;}
+ 
+  #loader{
+    position:fixed;inset:0;z-index:8;
+    display:none;align-items:center;justify-content:center;
+    background:rgba(4,6,13,0.55);
+  }
+  #loader .spin{
+    width:34px;height:34px;border-radius:50%;
+    border:2px solid var(--line);
+    border-top-color:var(--cyan);
+    animation:spin 0.9s linear infinite;
+  }
+  @keyframes spin{to{transform:rotate(360deg);}}
+</style>
+</head>
+<body>
+ 
+<canvas id="scene"></canvas>
+ 
+<header class="hud" style="pointer-events:none;">
+  <h1>Visual Sitemap Generator</h1>
+  <div class="subtitle">Orbital site structure // v2.0</div>
+  <div class="controls">
+    <input id="urlInput" value="https://engineeredai.net/sitemap_index.xml" spellcheck="false">
+    <button id="generateBtn">Generate</button>
+  </div>
+  <div class="status" id="statusLine"></div>
+</header>
+ 
+<div class="hud stats" id="stats" style="display:none;"></div>
+ 
+<div class="hud legend" id="legend" style="display:none;">
+  <div class="row"><span class="dot" style="background:var(--cyan);"></span>Site root</div>
+  <div class="row"><span class="dot" style="background:var(--violet);"></span>Category</div>
+  <div class="row"><span class="dot" style="background:var(--mint);"></span>Post</div>
+</div>
+ 
+<div class="hud hint">
+  drag to rotate<br>
+  scroll to zoom in for post titles<br>
+  click a node to open it
+</div>
+ 
+<div id="tooltip"></div>
+ 
+<div id="loader"><div class="spin"></div></div>
+ 
+<script data-cfasync="false" src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js" onerror="document.getElementById('statusLine').textContent='3D library failed to load. check your internet connection or ad blocker, then reload.'; document.getElementById('statusLine').classList.add('error');"></script>
+<script data-cfasync="false">
+(function(){
+ 
+if (typeof THREE === 'undefined'){
+  const s = document.getElementById('statusLine');
+  s.textContent = '3D library failed to load. check your internet connection or ad blocker, then reload.';
+  s.classList.add('error');
+  return;
+}
+ 
+window.addEventListener('error', e => {
+  const s = document.getElementById('statusLine');
+  s.textContent = 'error: ' + (e.message || 'something broke, check the browser console');
+  s.classList.add('error');
+});
+ 
+// decode HTML entities (WP REST returns names/titles HTML-escaped, e.g. "AI &amp; ML")
+// safe: textarea content is never parsed as executable markup, only its text value is read
+function decodeEntities(str){
+  if (!str) return str;
+  const el = document.createElement('textarea');
+  el.innerHTML = str;
+  return el.value;
+}
+ 
+// ---------- palette ----------
+const COLOR_ROOT = 0x5ad8ff;
+const COLOR_CATEGORY = 0xb06bff;
+const COLOR_POST = 0x4dffc4;
+ 
+// ---------- dom ----------
+const canvas = document.getElementById('scene');
+const urlInput = document.getElementById('urlInput');
+const generateBtn = document.getElementById('generateBtn');
+const statusLine = document.getElementById('statusLine');
+const statsEl = document.getElementById('stats');
+const legendEl = document.getElementById('legend');
+const tooltip = document.getElementById('tooltip');
+const loader = document.getElementById('loader');
+ 
+function setStatus(msg, isError){
+  statusLine.textContent = msg || '';
+  statusLine.classList.toggle('error', !!isError);
+}
+function showLoader(show){ loader.style.display = show ? 'flex' : 'none'; }
+ 
+// ---------- three.js setup ----------
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(58, window.innerWidth/window.innerHeight, 0.1, 6000);
+camera.position.set(0, 60, 420);
+ 
+const renderer = new THREE.WebGLRenderer({ canvas, antialias:true, alpha:false });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setClearColor(0x04060d, 1);
+ 
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+ 
+// world group holds the whole graph, rotated by drag
+const world = new THREE.Group();
+scene.add(world);
+ 
+// ---------- starfield (independent slow parallax layer) ----------
+const starGeo = new THREE.BufferGeometry();
+const STAR_COUNT = 2600;
+const starPos = new Float32Array(STAR_COUNT * 3);
+for (let i = 0; i < STAR_COUNT; i++){
+  const r = 900 + Math.random() * 900;
+  const theta = Math.random() * Math.PI * 2;
+  const phi = Math.acos((Math.random() * 2) - 1);
+  starPos[i*3]     = r * Math.sin(phi) * Math.cos(theta);
+  starPos[i*3 + 1] = r * Math.sin(phi) * Math.sin(theta);
+  starPos[i*3 + 2] = r * Math.cos(phi);
+}
+starGeo.setAttribute('position', new THREE.BufferAttribute(starPos, 3));
+const starMat = new THREE.PointsMaterial({ color: 0x9fb4e8, size: 1.6, transparent:true, opacity:0.55, sizeAttenuation:true });
+const stars = new THREE.Points(starGeo, starMat);
+scene.add(stars);
+ 
+// ---------- soft disc texture for glowing point sprites ----------
+function discTexture(hex){
+  const size = 64;
+  const c = document.createElement('canvas');
+  c.width = c.height = size;
+  const ctx = c.getContext('2d');
+  const col = '#' + hex.toString(16).padStart(6,'0');
+  const grad = ctx.createRadialGradient(size/2, size/2, 0, size/2, size/2, size/2);
+  grad.addColorStop(0, col);
+  grad.addColorStop(0.35, col);
+  grad.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, size, size);
+  const tex = new THREE.CanvasTexture(c);
+  return tex;
+}
+const POST_TEX = discTexture(COLOR_POST);
+ 
+// ---------- label sprite ----------
+function labelSprite(text, hex, scale){
+  scale = scale || 0.34;
+  const pad = 10;
+  const fontSize = 26;
+  const c = document.createElement('canvas');
+  const ctx = c.getContext('2d');
+  ctx.font = `${fontSize}px 'Space Mono', monospace`;
+  const w = Math.ceil(ctx.measureText(text).width) + pad*2;
+  const h = fontSize + pad*2;
+  c.width = w; c.height = h;
+  ctx.font = `${fontSize}px 'Space Mono', monospace`;
+  ctx.fillStyle = 'rgba(4,6,13,0.72)';
+  ctx.fillRect(0,0,w,h);
+  ctx.fillStyle = '#' + hex.toString(16).padStart(6,'0');
+  ctx.textBaseline = 'middle';
+  ctx.fillText(text, pad, h/2);
+  const tex = new THREE.CanvasTexture(c);
+  const mat = new THREE.SpriteMaterial({ map: tex, transparent:true, depthWrite:false, opacity:1 });
+  const sprite = new THREE.Sprite(mat);
+  sprite.scale.set(w*scale, h*scale, 1);
+  return sprite;
+}
+ 
+// ---------- node builders ----------
+function glowNode(radius, hex){
+  const g = new THREE.Group();
+  const core = new THREE.Mesh(
+    new THREE.IcosahedronGeometry(radius, 1),
+    new THREE.MeshBasicMaterial({ color: hex, wireframe:true, transparent:true, opacity:0.9 })
+  );
+  const halo = new THREE.Mesh(
+    new THREE.SphereGeometry(radius * 2.1, 16, 16),
+    new THREE.MeshBasicMaterial({ color: hex, transparent:true, opacity:0.09, blending:THREE.AdditiveBlending, depthWrite:false })
+  );
+  g.add(halo, core);
+  return g;
+}
+ 
+// ---------- fibonacci sphere distribution ----------
+function fibonacciSphere(count, radius){
+  const pts = [];
+  if (count <= 0) return pts;
+  if (count === 1) { pts.push(new THREE.Vector3(radius, 0, 0)); return pts; }
+  const golden = Math.PI * (3 - Math.sqrt(5));
+  for (let i = 0; i < count; i++){
+    const y = 1 - (i / (count - 1)) * 2;
+    const r = Math.sqrt(Math.max(0, 1 - y*y));
+    const theta = golden * i;
+    const x = Math.cos(theta) * r;
+    const z = Math.sin(theta) * r;
+    pts.push(new THREE.Vector3(x*radius, y*radius, z*radius));
+  }
+  return pts;
+}
+ 
+// ---------- interaction state ----------
+let dragging = false, lastX = 0, lastY = 0;
+let velX = 0, velY = 0;
+let dragDistance = 0;
+ 
+canvas.addEventListener('mousedown', e => {
+  dragging = true; dragDistance = 0;
+  lastX = e.clientX; lastY = e.clientY;
+  canvas.classList.add('dragging');
+});
+window.addEventListener('mouseup', () => { dragging = false; canvas.classList.remove('dragging'); });
+window.addEventListener('mousemove', e => {
+  if (dragging){
+    const dx = e.clientX - lastX, dy = e.clientY - lastY;
+    dragDistance += Math.abs(dx) + Math.abs(dy);
+    velY = dx * 0.004;
+    velX = dy * 0.004;
+    world.rotation.y += velY;
+    world.rotation.x += velX;
+    lastX = e.clientX; lastY = e.clientY;
+    hideTooltip();
+  } else {
+    handleHover(e.clientX, e.clientY);
+  }
+});
+canvas.addEventListener('wheel', e => {
+  e.preventDefault();
+  const dist = camera.position.length();
+  const factor = e.deltaY < 0 ? 0.9 : 1.1;
+  const next = THREE.MathUtils.clamp(dist * factor, 16, 1600);
+  camera.position.setLength(next);
+}, { passive:false });
+ 
+// touch (single finger rotate)
+canvas.addEventListener('touchstart', e => {
+  if (e.touches.length === 1){
+    dragging = true; dragDistance = 0;
+    lastX = e.touches[0].clientX; lastY = e.touches[0].clientY;
+  }
+}, { passive:true });
+canvas.addEventListener('touchmove', e => {
+  if (dragging && e.touches.length === 1){
+    const t = e.touches[0];
+    const dx = t.clientX - lastX, dy = t.clientY - lastY;
+    velY = dx * 0.004; velX = dy * 0.004;
+    world.rotation.y += velY;
+    world.rotation.x += velX;
+    lastX = t.clientX; lastY = t.clientY;
+  }
+}, { passive:true });
+canvas.addEventListener('touchend', () => { dragging = false; });
+ 
+canvas.addEventListener('click', e => {
+  if (dragDistance > 6) return; // was a drag, not a click
+  const hit = pickAt(e.clientX, e.clientY);
+  if (!hit) return;
+  if (hit.url) {
+    window.open(hit.url, '_blank', 'noopener');
+  } else if (hit.focusPoint) {
+    focusOn(hit.focusPoint);
+  }
+});
+ 
+// ---------- raycasting ----------
+const raycaster = new THREE.Raycaster();
+raycaster.params.Points.threshold = 5;
+const mouseNDC = new THREE.Vector2();
+ 
+let pickables = []; // { object3D, kind, url, title, focusPoint }
+let postClouds = []; // Points objects with userData.posts[]
+let postLabels = []; // { sprite, threshold }
+ 
+function ndcFromClient(x, y){
+  mouseNDC.x = (x / window.innerWidth) * 2 - 1;
+  mouseNDC.y = -(y / window.innerHeight) * 2 + 1;
+}
+ 
+function pickAt(x, y){
+  ndcFromClient(x, y);
+  raycaster.setFromCamera(mouseNDC, camera);
+ 
+  // meshes (root + category cores)
+  const meshHits = raycaster.intersectObjects(pickables.map(p => p.object3D), false);
+  if (meshHits.length){
+    const found = pickables.find(p => p.object3D === meshHits[0].object || p.object3D === meshHits[0].object.parent);
+    if (found) return found;
+  }
+ 
+  // post point clouds
+  const cloudHits = raycaster.intersectObjects(postClouds, false);
+  if (cloudHits.length){
+    const hit = cloudHits[0];
+    const post = hit.object.userData.posts[hit.index];
+    if (post) return { kind:'post', url: post.url, title: post.title };
+  }
+  return null;
+}
+ 
+function handleHover(x, y){
+  const hit = pickAt(x, y);
+  if (!hit){ hideTooltip(); return; }
+  tooltip.style.display = 'block';
+  tooltip.style.left = x + 'px';
+  tooltip.style.top = y + 'px';
+  tooltip.innerHTML = `<span class="kind">${hit.kind}</span>${hit.title || ''}`;
+}
+function hideTooltip(){ tooltip.style.display = 'none'; }
+ 
+function focusOn(point){
+  const dist = camera.position.length();
+  const dir = point.clone().normalize();
+  // simple ease toward looking at that direction by nudging rotation target
+  const targetY = Math.atan2(dir.x, dir.z);
+  world.rotation.y = -targetY;
+}
+ 
+// ---------- data layer ----------
+async function fetchText(url){
+  const res = await fetch(url);
+  if (!res.ok) throw new Error('fetch failed: ' + res.status);
+  return res.text();
+}
+async function fetchJSON(url){
+  const res = await fetch(url);
+  if (!res.ok) throw new Error('fetch failed: ' + res.status);
+  return res.json();
+}
+function proxied(url){
+  return `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
+}
+ 
+async function loadSitemapUrls(url){
+  const target = new URL(url);
+  const sameOrigin = target.origin === location.origin;
+  const xmlText = await fetchText(sameOrigin ? url : proxied(url));
+  const xml = new DOMParser().parseFromString(xmlText, 'text/xml');
+  if (xml.querySelector('parsererror')) throw new Error('invalid xml');
+ 
+  const index = xml.querySelectorAll('sitemapindex > sitemap > loc');
+  if (index.length){
+    let all = [];
+    for (const n of index){
+      all = all.concat(await loadSitemapUrls(n.textContent.trim()));
+    }
+    return all;
+  }
+  return [...xml.querySelectorAll('url > loc')].map(n => n.textContent.trim());
+}
+ 
+// try the WordPress REST API for real category/post relationships
+async function loadFromWpRest(origin){
+  const base = origin.replace(/\/$/, '');
+  const attempt = async (proxy) => {
+    const catMap = {}; // id -> {name, link}
+    let catPage = 1;
+    while (true){
+      const u = `${base}/wp-json/wp/v2/categories?per_page=100&page=${catPage}`;
+      const data = await fetchJSON(proxy ? proxied(u) : u);
+      if (!Array.isArray(data) || !data.length) break;
+      data.forEach(c => { catMap[c.id] = { name: decodeEntities(c.name), link: c.link, posts: [] }; });
+      if (data.length < 100) break;
+      catPage++;
+      if (catPage > 10) break;
+    }
+    if (!Object.keys(catMap).length) throw new Error('no categories');
+ 
+    let page = 1, total = 1, guard = 0;
+    const uncategorized = [];
+    while (page <= total && guard < 30){
+      const u = `${base}/wp-json/wp/v2/posts?per_page=100&page=${page}&_fields=id,link,title,categories`;
+      const res = await fetch(proxy ? proxied(u) : u);
+      if (!res.ok) throw new Error('posts fetch failed');
+      const tp = res.headers.get('x-wp-totalpages');
+      if (tp) total = parseInt(tp, 10) || 1;
+      const data = await res.json();
+      data.forEach(p => {
+        const raw = (p.title && p.title.rendered) ? p.title.rendered.replace(/<[^>]+>/g,'') : p.link;
+        const title = decodeEntities(raw);
+        const cats = (p.categories || []).filter(id => catMap[id]);
+        if (!cats.length){ uncategorized.push({ url: p.link, title }); return; }
+        cats.forEach(id => catMap[id].posts.push({ url: p.link, title }));
+      });
+      page++; guard++;
+    }
+    const categories = Object.values(catMap).filter(c => c.posts.length);
+    if (uncategorized.length) categories.push({ name:'uncategorized', link:null, posts: uncategorized });
+    if (!categories.length) throw new Error('no posts resolved');
+    return categories;
+  };
+ 
+  try { return await attempt(false); }
+  catch(e) { return await attempt(true); }
+}
+ 
+// fallback grouping when REST is unavailable: group by first path segment
+function groupByPathSegment(urls, rootHost){
+  const groups = {};
+  urls.forEach(u => {
+    let path;
+    try { path = new URL(u).pathname.replace(/\/$/, ''); } catch(e) { return; }
+    if (!path) return;
+    const seg = path.split('/').filter(Boolean)[0] || 'pages';
+    if (!groups[seg]) groups[seg] = { name: seg.replace(/-/g,' '), link:null, posts: [] };
+    const title = path.split('/').pop().replace(/-/g,' ') || seg;
+    groups[seg].posts.push({ url: u, title });
+  });
+  return Object.values(groups);
+}
+ 
+async function buildData(inputUrl){
+  const target = new URL(inputUrl);
+  const origin = target.origin;
+  const host = target.hostname;
+ 
+  let categories = [];
+  let mode = 'rest';
+  try {
+    categories = await loadFromWpRest(origin);
+  } catch (e) {
+    mode = 'sitemap';
+    const urls = await loadSitemapUrls(inputUrl);
+    const filtered = urls.filter(u => {
+      try { const p = new URL(u).pathname; return !p.startsWith('/tag/') && !p.startsWith('/wp-'); }
+      catch(e){ return false; }
+    });
+    categories = groupByPathSegment(filtered, host);
+  }
+ 
+  return { host, categories, mode };
+}
+ 
+// ---------- scene build ----------
+let currentGraph = null;
+ 
+function clearWorld(){
+  while (world.children.length) world.remove(world.children[0]);
+  pickables = [];
+  postClouds = [];
+  postLabels = [];
+}
+ 
+function buildScene(data){
+  clearWorld();
+ 
+  const R1 = Math.max(110, Math.min(260, 40 + data.categories.length * 14));
+  const rootRadius = 16;
+  const catRadius = 7;
+ 
+  // root
+  const rootNode = glowNode(rootRadius, COLOR_ROOT);
+  world.add(rootNode);
+  const rootLabel = labelSprite(data.host, COLOR_ROOT);
+  rootLabel.position.set(0, rootRadius + 10, 0);
+  world.add(rootLabel);
+  pickables.push({ object3D: rootNode, kind:'root', url:null, title:data.host, focusPoint:new THREE.Vector3(0,0,rootRadius) });
+ 
+  const catPositions = fibonacciSphere(data.categories.length, R1);
+  let maxReach = R1;
+ 
+  data.categories.forEach((cat, i) => {
+    const cpos = catPositions[i];
+ 
+    const catNode = glowNode(catRadius, COLOR_CATEGORY);
+    catNode.position.copy(cpos);
+    world.add(catNode);
+ 
+    const catLabel = labelSprite(cat.name, COLOR_CATEGORY);
+    catLabel.position.copy(cpos).add(new THREE.Vector3(0, catRadius + 7, 0));
+    world.add(catLabel);
+ 
+    pickables.push({
+      object3D: catNode, kind:'category',
+      url: cat.link, title: cat.name,
+      focusPoint: cpos.clone()
+    });
+ 
+    // root -> category line
+    const lineGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0,0,0), cpos]);
+    const lineMat = new THREE.LineBasicMaterial({ color: COLOR_CATEGORY, transparent:true, opacity:0.32, blending:THREE.AdditiveBlending });
+    world.add(new THREE.Line(lineGeo, lineMat));
+ 
+    // posts around this category
+    const postCount = cat.posts.length;
+    if (!postCount) return;
+    const R2 = Math.max(20, Math.min(60, 14 + postCount * 1.2));
+    maxReach = Math.max(maxReach, R1 + R2);
+ 
+    const localOffsets = fibonacciSphere(postCount, R2);
+    const positions = new Float32Array(postCount * 3);
+    const segPositions = new Float32Array(postCount * 3 * 2);
+    const labelThreshold = Math.max(R2 * 2.6, 30);
+ 
+    cat.posts.forEach((post, j) => {
+      const p = cpos.clone().add(localOffsets[j]);
+      positions[j*3] = p.x; positions[j*3+1] = p.y; positions[j*3+2] = p.z;
+      segPositions[j*6]   = cpos.x; segPositions[j*6+1] = cpos.y; segPositions[j*6+2] = cpos.z;
+      segPositions[j*6+3] = p.x;    segPositions[j*6+4] = p.y;    segPositions[j*6+5] = p.z;
+ 
+      const lbl = labelSprite(post.title, COLOR_POST, 0.2);
+      lbl.position.copy(p).add(new THREE.Vector3(0, 3, 0));
+      lbl.material.opacity = 0;
+      lbl.visible = false;
+      world.add(lbl);
+      postLabels.push({ sprite: lbl, threshold: labelThreshold });
+    });
+ 
+    const segGeo = new THREE.BufferGeometry();
+    segGeo.setAttribute('position', new THREE.BufferAttribute(segPositions, 3));
+    const segMat = new THREE.LineBasicMaterial({ color: COLOR_POST, transparent:true, opacity:0.16, blending:THREE.AdditiveBlending });
+    world.add(new THREE.LineSegments(segGeo, segMat));
+ 
+    const cloudGeo = new THREE.BufferGeometry();
+    cloudGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    const cloudMat = new THREE.PointsMaterial({
+      map: POST_TEX, color: COLOR_POST, size: 6, transparent:true,
+      opacity:0.95, blending:THREE.AdditiveBlending, depthWrite:false, sizeAttenuation:true
+    });
+    const cloud = new THREE.Points(cloudGeo, cloudMat);
+    cloud.userData.posts = cat.posts;
+    world.add(cloud);
+    postClouds.push(cloud);
+  });
+ 
+  const dist = THREE.MathUtils.clamp(maxReach * 2.4, 140, 1400);
+  camera.position.set(0, maxReach * 0.35, dist);
+  camera.lookAt(0,0,0);
+ 
+  const totalPosts = data.categories.reduce((n,c) => n + c.posts.length, 0);
+  statsEl.style.display = 'flex';
+  legendEl.style.display = 'flex';
+  statsEl.innerHTML =
+    `<span><b>${data.categories.length}</b> categories</span>` +
+    `<span><b>${totalPosts}</b> posts</span>` +
+    `<span>source: <b>${data.mode}</b></span>`;
+}
+ 
+// ---------- generate flow ----------
+async function generate(){
+  const raw = urlInput.value.trim();
+  if (!raw) return;
+  let url;
+  try { url = new URL(raw); } catch(e){ setStatus('enter a valid url', true); return; }
+ 
+  generateBtn.disabled = true;
+  showLoader(true);
+  setStatus('fetching site structure...');
+ 
+  try {
+    const data = await buildData(url.toString());
+    currentGraph = data;
+    buildScene(data);
+    setStatus(data.mode === 'rest'
+      ? 'loaded from the WordPress REST API'
+      : 'loaded from sitemap.xml (path grouped, REST API unavailable)');
+  } catch (err) {
+    console.error(err);
+    setStatus('could not load that site. check the url and try again.', true);
+  } finally {
+    generateBtn.disabled = false;
+    showLoader(false);
+  }
+}
+generateBtn.addEventListener('click', generate);
+urlInput.addEventListener('keydown', e => { if (e.key === 'Enter') generate(); });
+ 
+// ---------- render loop ----------
+const _labelWorldPos = new THREE.Vector3();
+ 
+function animate(){
+  requestAnimationFrame(animate);
+ 
+  if (!dragging){
+    // gentle inertia decay
+    velX *= 0.92; velY *= 0.92;
+    world.rotation.x += velX;
+    world.rotation.y += velY;
+  }
+  world.rotation.y += 0.0006; // slow ambient drift
+  stars.rotation.y += 0.00012;
+  stars.rotation.x += 0.00004;
+ 
+  for (let i = 0; i < postLabels.length; i++){
+    const entry = postLabels[i];
+    entry.sprite.getWorldPosition(_labelWorldPos);
+    const dist = camera.position.distanceTo(_labelWorldPos);
+    if (dist < entry.threshold){
+      const t = THREE.MathUtils.clamp(1 - dist / entry.threshold, 0, 1);
+      entry.sprite.material.opacity = t;
+      entry.sprite.visible = t > 0.02;
+    } else {
+      entry.sprite.visible = false;
+    }
+  }
+ 
+  renderer.render(scene, camera);
+}
+animate();
+ 
+})();
+</script>
+</body>
+</html>
+ 
+
